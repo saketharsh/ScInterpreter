@@ -3,12 +3,12 @@ import Control.Monad
 import System.Environment
 import Text.ParserCombinators.Parsec hiding (spaces) -- defined our own spaces 
 
-
-main :: IO ()
+main :: IO ()  -- left to add eval function over the readExpr, in order to get the output
 main = do 
 	args <- getArgs
-	putStrLn (readExpr (args !! 0))
+	putStrLn ( (show . eval . readExpr) (args !! 0))
 
+ ------------------------------------Parsing the Lisp Style Syntax ---------------------------
 
 symbol :: Parser Char   -- parser that recognises the symbol
 symbol = oneOf "!$%|*+-/:<=?>@^_~#"
@@ -16,10 +16,10 @@ symbol = oneOf "!$%|*+-/:<=?>@^_~#"
 spaces :: Parser () -- additonal features to recognize spaces
 spaces = skipMany1 space
 
-readExpr :: String -> String 
+readExpr :: String -> LispVal  -- change the data type to String -> LispVal , coz we will evaluate the output from thid function
 readExpr input = case parse parseExpr "lisp" input of 
-	Left err -> "No Match: " ++ show err
-	Right err -> "Found Value"
+	Left err -> String $ "No Match: " ++ show err
+	Right val ->  val
 
 data LispVal = Atom String  --data type support for Scheme 
 	| List [LispVal]
@@ -36,7 +36,7 @@ parseString = do
 	(return . String) s 
 
 parseNumber :: Parser LispVal
-parseNumber = many1 digit >>= return . Number . read   -- to parse number 
+parseNumber = liftM ( Number . read ) $ many1 digit  -- to parse number 
 
 parseAtom :: Parser LispVal  -- to parse atoms 
 parseAtom = do 
@@ -72,11 +72,58 @@ parseExpr = parseAtom
 		char '('
 		x <- (try parseList) <|> parseDottedList
 		char ')'
-		return x
+		return x 
+
+---------------------------- Evaluating the Parsed Values -----------------------------------------------------------
+
+
+instance Show LispVal where show = showVal -- helps us to print LispVal type values
+
+unwordsList :: [LispVal] -> String -- helper function to print lists in the interpreter 
+unwordsList = unwords.map showVal
+
+
+showVal :: LispVal -> String   -- the basic printing function of our interpreter
+showVal (String contents) = "\"" ++ contents ++ "\""
+showVal (Atom name ) = name
+showVal (Number contents) = show contents
+showVal (Bool True ) = "#t"
+showVal (Bool False ) = "#f"
+showVal (List contents ) = "(" ++ unwordsList contents ++ ")"
+showVal (DottedList head tail) = "(" ++ unwordsList head ++ " . " ++  showVal tail ++ ")"
 
 
 
+eval :: LispVal -> LispVal
+eval val@(String _ ) = val
+eval val@(Number _ ) = val
+eval val@(Bool _) = val
+eval ( List [Atom "quote" , val] ) = val
+eval (List (Atom func : args)) = apply func $ map eval args
+
+apply :: String -> [LispVal] -> LispVal
+apply func args = maybe( Bool False) ($ args) $ lookup func primitives
 
 
+primitives :: [(String, [LispVal]-> LispVal)] -- primitive operations that we wish to support1
+primitives = [  ( "+" , numericBinop (+) ) ,
+				( "-" , numericBinop (−) ) ,
+				( "*" , numericBinop (∗) ) ,
+				( "/" , numericBinop div ) ,
+				( "mod" , numericBinop mod) ,
+				( "quotient" , numericBinop quot) ,
+				( "remainder" , numericBinop rem) ]
 
+
+numericBinop :: (Integer -> Integer -> Integer) -> [LispVal]-> LispVal
+numericBinop op params = Number $ foldl1 op $ map unpackNum params
+
+unpackNum :: LispVal -> Integer
+unpackNum (Number n ) = n 
+unpackNum (String n) = let parsed = reads n in 
+							if null parsed
+								then 0
+								else fst $ parsed !! 0
+unpackNum (List [n]) = unpackNum n
+unpackNum _ = 0
 
