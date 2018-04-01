@@ -1,5 +1,6 @@
 module Main where 
 import Control.Monad
+import Control.Monad.Error
 import System.Environment
 import Text.ParserCombinators.Parsec hiding (spaces) -- defined our own spaces 
 
@@ -27,6 +28,14 @@ data LispVal = Atom String  --data type support for Scheme
 	| Number Integer 
 	| String String
 	| Bool Bool
+
+data LispError = NumArgs Integer [LispVal]
+	| TypeMismatch String LispVal
+	| Parser ParseError
+	| BadSpeciaForm String LispVal
+	| NotFunction String String
+	| Unboundvar String String
+	| Default String
 
 parseString :: Parser LispVal
 parseString = do 
@@ -78,9 +87,24 @@ parseExpr = parseAtom
 
 
 instance Show LispVal where show = showVal -- helps us to print LispVal type values
+instance Show LispError where show = showError
+
+instance Error LispError where 
+	noMsg = Default "An error has occured"
+	strMsg = Default
 
 unwordsList :: [LispVal] -> String -- helper function to print lists in the interpreter 
-unwordsList = unwords.map showVal
+unwordsList = unwords . map  showVal
+
+type ThrowsError = Either LispError
+
+showError :: LispError -> String
+showError (UnboundVar message varname) = message ++ ": " ++ varname
+showError (BadSpecialForm messafe form) = message ++ ": " ++ show form
+showError (NotFunction message func) = message ++ ": " ++ show func
+showError (NumArgs expected found ) = "Expected " ++ show expected ++ "args :: found values " ++ unwordsList found
+showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected ++ ", found : " ++ show found 
+showError (Parser parseError ) = "Parse error at " ++ show parseErr
 
 
 showVal :: LispVal -> String   -- the basic printing function of our interpreter
@@ -102,17 +126,17 @@ eval ( List [Atom "quote" , val] ) = val
 eval (List (Atom func : args)) = apply func $ map eval args
 
 apply :: String -> [LispVal] -> LispVal
-apply func args = maybe( Bool False) ($ args) $ lookup func primitives
+apply func args = maybe ( Bool False) ($ args) $ lookup func primitives
 
 
 primitives :: [(String, [LispVal]-> LispVal)] -- primitive operations that we wish to support1
-primitives = [  ( "+" , numericBinop (+) ) ,
-				( "-" , numericBinop (−) ) ,
-				( "*" , numericBinop (∗) ) ,
-				( "/" , numericBinop div ) ,
-				( "mod" , numericBinop mod) ,
-				( "quotient" , numericBinop quot) ,
-				( "remainder" , numericBinop rem) ]
+primitives =   [( "+" , numericBinop (+) ),
+				( "-" , numericBinop (−) ),  -- - and * are crearting some problem, comment them out and evertything is fine
+				( "*" , numericBinop (∗) ),
+				( "/" , numericBinop div ),
+				( "mod" , numericBinop mod),
+				( "quotient" , numericBinop quot),
+				( "remainder" , numericBinop rem)]
 
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal]-> LispVal
