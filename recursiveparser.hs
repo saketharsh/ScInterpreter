@@ -1,11 +1,17 @@
+{-# LANGUAGE ExistentialQuantification #-}
 module Main where
 
-import Data.Char 
-import Data.Array
-import Control.Monad
-import Control.Monad.Error -- for error handling in Lisp 
+import Control.Monad (liftM)
+import Control.Monad.Error
+import Data.Array (Array (..), listArray)
+import Data.Char (toLower)
+import Data.Complex (Complex (..))
+import Data.IORef
+import Data.Ratio (Rational (..), (%))
+import System.IO hiding (try)
+import Numeric (readOct, readHex)
 import System.Environment
-import Text.ParserCombinators.Parsec hiding (spaces) -- defined our own spaces 
+import Text.ParserCombinators.Parsec hiding (spaces)
 
 main :: IO ()  -- left to add eval function over the readExpr, in order to get the output
 main = do 
@@ -119,12 +125,49 @@ primitives =   [( "+" , numericBinop (+) ),
 				( "/" , numericBinop div ),
 				( "mod" , numericBinop mod),
 				( "quotient" , numericBinop quot),
-				( "remainder" , numericBinop rem)]
+				( "remainder" , numericBinop rem),
+				("=", numBoolBinop (==) ),
+				("<" , numBoolBinop (<)),
+				(">", numBoolBinop (>)),
+				("/=", numBoolBinop (/=)),
+				(">=", numBoolBinop (>=)),
+				("<=", numBoolBinop (<=)),
+				("&&", boolBoolBinop (&&)),
+				("||", boolBoolBinop (||)),
+				("string=?", strBoolBinop (==)),
+				("string?", strBoolBinop (>)),
+				("string<?", strBoolBinop (<=)),
+				("string>?", strBoolBinop (>=))]
 
+
+boolBinop :: (LispVal -> ThrowsError a) 
+          -> (a -> a -> Bool) 
+          -> [LispVal] 
+          -> ThrowsError LispVal
+boolBinop unpacker op [x,y] = do
+    left <- unpacker x
+    right <- unpacker y
+    return $ Bool $ left `op` right
+boolBinop _ _ args = throwError $ NumArgs 2 args
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal]-> ThrowsError LispVal
 numericBinop op singleVal@[_] = throwError $ NumArgs 2 singleVal
 numericBinop op params = mapM unpackNum params >>= return . Number . foldl1  op
+
+
+numBoolBinop = boolBinop unpackNum
+strBoolBinop = boolBinop unpackStr
+boolBoolBinop = boolBinop unpackBool
+
+unpackStr :: LispVal -> ThrowsError String
+unpackStr (String s ) = return s
+unpackStr (Number s ) = return $ show s 
+unpackStr (Bool s ) = return $ show s 
+unpackStr notString = throwError $ TypeMismatch "string " notString
+
+unpackBool :: LispVal -> ThrowsError Bool
+unpackBool (Bool b ) = return b 
+unpackBool notBool = throwError $ TypeMismatch "boolean" notBool
 
 unpackNum :: LispVal -> ThrowsError Integer
 unpackNum (Number n ) = return n 
