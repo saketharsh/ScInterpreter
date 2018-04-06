@@ -14,15 +14,15 @@ import System.Environment
 import Text.ParserCombinators.Parsec hiding (spaces)
 
 main :: IO ()  -- left to add eval function over the readExpr, in order to get the output
-main = do 
+main = do
 	args <- getArgs
 	evaled <- return $ liftM show $ readExpr (args !! 0 ) >>= eval
 	putStrLn $ extractValue $ trapError evaled
 
  ------------------------------------Parsing the Lisp Style Syntax ---------------------------
 
-readExpr :: String -> ThrowsError LispVal  
-readExpr input = case parse parseExpr "lisp" input of 
+readExpr :: String -> ThrowsError LispVal
+readExpr input = case parse parseExpr "lisp" input of
 	Left err ->  throwError $ Parser err
 	Right val ->  return val
 
@@ -34,32 +34,32 @@ spaces :: Parser () -- additonal features to recognize spaces
 spaces = skipMany1 space
 
 
-data LispVal = Atom String  --data type support for Scheme 
+data LispVal = Atom String  --data type support for Scheme
 	| List [LispVal]
 	| DottedList [LispVal] LispVal
-	| Number Integer 
+	| Number Integer
 	| String String
 	| Bool Bool
 
 
 parseString :: Parser LispVal
-parseString = do 
+parseString = do
 	char '"'
 	s <- many (noneOf "\"")
 	char '"'
-	(return . String) s 
+	(return . String) s
 
 parseNumber :: Parser LispVal
-parseNumber = liftM ( Number . read ) $ many1 digit  -- to parse number 
+parseNumber = liftM ( Number . read ) $ many1 digit  -- to parse number
 
-parseAtom :: Parser LispVal  -- to parse atoms 
-parseAtom = do 
+parseAtom :: Parser LispVal  -- to parse atoms
+parseAtom = do
 	first <- letter <|> symbol
 	rest <- many ( letter <|> digit <|> symbol )
 	let atom = [first] ++ rest
-	return $ case atom of 
+	return $ case atom of
 		"#t" -> Bool True
-		"#f" -> Bool False 
+		"#f" -> Bool False
 		otherwise -> Atom atom
 
 parseList :: Parser LispVal
@@ -72,21 +72,21 @@ parseDottedList = do
 	return $ DottedList head tail
 
 parseQuoted :: Parser LispVal   -- defintion to allow nested quotes"
-parseQuoted = do 
+parseQuoted = do
 	char '\''
 	x <- parseExpr
 	return $ List [ Atom "quote", x]
 
-parseExpr :: Parser LispVal -- to parse according to data type  Here the order in which I have mentioned things matter 
-parseExpr = parseAtom 
-	<|> parseString 
-	<|> parseNumber 
+parseExpr :: Parser LispVal -- to parse according to data type  Here the order in which I have mentioned things matter
+parseExpr = parseAtom
+	<|> parseString
+	<|> parseNumber
 	<|> parseQuoted
 	<|> do
 		char '('
 		x <- (try parseList) <|> parseDottedList
 		char ')'
-		return x 
+		return x
 
 ---------------------------- Evaluating the Parsed Values -----------------------------------------------------------
 
@@ -103,7 +103,7 @@ showVal (Bool False ) = "#f"
 showVal (List contents ) = "(" ++ unwordsList contents ++ ")"
 showVal (DottedList head tail) = "(" ++ unwordsList head ++ " . " ++  showVal tail ++ ")"
 
-unwordsList :: [LispVal] -> String -- helper function to print lists in the interpreter 
+unwordsList :: [LispVal] -> String -- helper function to print lists in the interpreter
 unwordsList = unwords . map  showVal
 
 eval :: LispVal -> ThrowsError LispVal
@@ -113,7 +113,7 @@ eval val@(Bool _) = return val
 eval ( List [Atom "quote" , val] ) = return val
 eval (List [Atom "if", pred, conseq, alt]) = do
 	result <- eval pred
-	case result of 
+	case result of
 		Bool False -> eval alt
 		Bool False  -> eval conseq
 		othewise -> throwError $ TypeMismatch "boolean" result
@@ -142,13 +142,15 @@ primitives =   [( "+" , numericBinop (+) ),
 				("||", boolBoolBinop (||)),
 				("string=?", strBoolBinop (==)),
 				("string?", strBoolBinop (>)),
+				("cdr", cdr), -- this is something you want to look at
+				("car", car),
 				("string<?", strBoolBinop (<=)),
 				("string>?", strBoolBinop (>=))]
 
 
-boolBinop :: (LispVal -> ThrowsError a) 
-          -> (a -> a -> Bool) 
-          -> [LispVal] 
+boolBinop :: (LispVal -> ThrowsError a)
+          -> (a -> a -> Bool)
+          -> [LispVal]
           -> ThrowsError LispVal
 boolBinop unpacker op [x,y] = do
     left <- unpacker x
@@ -167,19 +169,19 @@ boolBoolBinop = boolBinop unpackBool
 
 unpackStr :: LispVal -> ThrowsError String
 unpackStr (String s ) = return s
-unpackStr (Number s ) = return $ show s 
-unpackStr (Bool s ) = return $ show s 
+unpackStr (Number s ) = return $ show s
+unpackStr (Bool s ) = return $ show s
 unpackStr notString = throwError $ TypeMismatch "string " notString
 
 unpackBool :: LispVal -> ThrowsError Bool
-unpackBool (Bool b ) = return b 
+unpackBool (Bool b ) = return b
 unpackBool notBool = throwError $ TypeMismatch "boolean" notBool
 
 unpackNum :: LispVal -> ThrowsError Integer
-unpackNum (Number n ) = return n 
-unpackNum (String n) = let parsed = reads n in 
+unpackNum (Number n ) = return n
+unpackNum (String n) = let parsed = reads n in
 							if null parsed
-								then throwError $ TypeMismatch "number" $ String n 
+								then throwError $ TypeMismatch "number" $ String n
 								else return $ fst $ parsed !! 0
 unpackNum (List [n]) = unpackNum n
 unpackNum notNum  = throwError $ TypeMismatch "number" notNum
@@ -190,14 +192,14 @@ car :: [LispVal] -> ThrowsError LispVal
 car [List (x:xs)] = return x
 car [DottedList (x:xs) _] = return x
 car [badArg] = throwError $ TypeMismatch "pair" badArg
-car badArgList = throwError $ NumArgs 1 badArgList 
+car badArgList = throwError $ NumArgs 1 badArgList
 
 cdr :: [LispVal] -> ThrowsError LispVal
 cdr [List (x:xs)] = return $ List xs
 cdr [DottedList (_:xs) x] = return $ DottedList xs x
 cdr [DottedList [xs] x] = return x
 cdr [badArg] = throwError $ TypeMismatch "pair" badArg
-cdr badArgList = throwError $ NumArgs 1 badArgList 
+cdr badArgList = throwError $ NumArgs 1 badArgList
 
 cons :: [LispVal] -> ThrowsError LispVal
 cons [x1, List [] ] = return $ List [x1]
@@ -219,7 +221,7 @@ eqv [(Number n1), (Number n2)] = (return . Bool) $ n1 == n2
 eqv [(String s1), (String s2)] = (return . Bool) $ s1 == s2
 eqv [(Atom a1), (Atom a2)] = (return . Bool) $ a1 == a2
 
-eqv [(DottedList xs x), (DottedList ys y)] = 
+eqv [(DottedList xs x), (DottedList ys y)] =
     eqv [List $ xs ++ [x], List $ ys ++ [y]]
 
 eqv [(List l1), (List l2)]
@@ -240,7 +242,7 @@ eqv badArgList = throwError $ NumArgs 2 badArgList
 
 instance Show LispError where show = showError
 
-instance Error LispError where 
+instance Error LispError where
 	noMsg = Default "An error has occured"
 	strMsg = Default
 
@@ -248,10 +250,10 @@ type ThrowsError = Either LispError   -- to return either the error, or the Lisp
 
 trapError action = catchError action (return . show )
 
-extractValue :: ThrowsError a -> a 
+extractValue :: ThrowsError a -> a
 extractValue (Right val ) = val
 
-data LispError = NumArgs Integer [LispVal]  -- more support can be added as time and knowledge permits 
+data LispError = NumArgs Integer [LispVal]  -- more support can be added as time and knowledge permits
 	| TypeMismatch String LispVal
 	| Parser ParseError
 	| BadSpecialForm String LispVal
@@ -265,5 +267,5 @@ showError (UnboundVar message varname) = message ++ ": " ++ varname
 showError (BadSpecialForm message form) = message ++ ": " ++ show form
 showError (NotFunction message func) = message ++ ": " ++ show func
 showError (NumArgs expected found ) = "Expected " ++ show expected ++ "args :: found values " ++ unwordsList found
-showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected ++ ", found : " ++ show found 
+showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected ++ ", found : " ++ show found
 showError (Parser parseError ) = "Parse error at " ++ show parseError
