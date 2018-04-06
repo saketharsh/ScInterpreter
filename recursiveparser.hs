@@ -197,26 +197,6 @@ unpackNum (List [n]) = unpackNum n
 unpackNum notNum  = throwError $ TypeMismatch "number" notNum
 
 
-data Unpacker = forall a . Eq a => AnyUnpacker (LispVal -> ThrowsError a)  -- to handle some extra equality conditions supported in scheme 
-
-
-unpackEquals :: LispVal -> LispVal -> Unpacker -> ThrowsError Bool
-unpackEquals arg1 arg2  (AnyUnpacker unpacker ) = do
-	unpacked1 <- unpacker arg1
-	unpacked2 <- unpacker arg2
-	return $ unpacked1 == unpacked2
-	`catchError` (const $ return False)
-
-
-equal ::[LispVal] -> ThrowsError LispVal  -- basically handles 2 == "2" -> "True" case   
-equal [arg1, arg2] = do
-	primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2) 
-		[AnyUnpacker unpackNum, AnyUnpacker unpackStr, AnyUnpacker unpackBool]
-	eqvEquals <- eqv [arg1, arg2]
-	return $ Bool $ (primitiveEquals || let (Bool x) = eqvEquals in x)
-equal badArgList = throwError $ NumArgs 2 badArgList
-
-
 ---------------------------------------List Manipulations in Scheme -------------------------------------
 
 car :: [LispVal] -> ThrowsError LispVal
@@ -267,6 +247,28 @@ eqv badArgList = throwError $ NumArgs 2 badArgList
 
 eqv [_, _] = return $ Bool False
 eqv badArgList = throwError $ NumArgs 2 badArgList
+
+
+
+data Unpacker = forall a . Eq a => AnyUnpacker (LispVal -> ThrowsError a)  -- to handle some extra equality conditions supported in scheme 
+
+
+unpackEquals :: LispVal -> LispVal -> Unpacker -> ThrowsError Bool
+unpackEquals arg1 arg2  (AnyUnpacker unpacker ) = do
+	unpacked1 <- unpacker arg1
+	unpacked2 <- unpacker arg2
+	return $ unpacked1 == unpacked2
+	`catchError` (const $ return False)
+
+
+equal ::[LispVal] -> ThrowsError LispVal  -- basically handles 2 == "2" -> "True" case   
+equal [arg1, arg2] = do
+	primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2) 
+		[AnyUnpacker unpackNum, AnyUnpacker unpackStr, AnyUnpacker unpackBool]
+	eqvEquals <- eqv [arg1, arg2]
+	return $ Bool $ (primitiveEquals || let (Bool x) = eqvEquals in x)
+equal badArgList = throwError $ NumArgs 2 badArgList
+
 
 
 --------------------------------------Error Handling for Scheme -----------------------------------------
