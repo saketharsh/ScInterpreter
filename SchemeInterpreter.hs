@@ -1,6 +1,8 @@
 {-# LANGUAGE ExistentialQuantification #-}
 module Main where
 
+import SchemeEval
+import SchemeParser
 import Control.Monad (liftM)
 import Control.Monad.Error
 import Data.Array (Array (..), listArray)
@@ -328,3 +330,19 @@ until_ pred prompt action = do
 		then return ()
 		else action result >> until_ pred prompt action
 
+
+
+
+
+-- ------------------------------------------- Defining Variable in Scheme -----------------------------------------------------
+
+
+-- type Env = IORef [(String , IORef LispVal)]
+-- type IOThrowsError = ErrorT LispError IO
+
+-- nullEnv :: IO Env
+-- nullEnv = newIORef []
+
+-- liftThrows :: ThrowError a -> IoThrowsError a 
+-- liftThrows (Left err) = throwError err
+-- liftThrows (Right val) = return val
