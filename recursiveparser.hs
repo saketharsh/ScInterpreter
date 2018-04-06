@@ -16,8 +16,14 @@ import Text.ParserCombinators.Parsec hiding (spaces)
 main :: IO ()  -- left to add eval function over the readExpr, in order to get the output
 main = do
 	args <- getArgs
-	evaled <- return $ liftM show $ readExpr (args !! 0 ) >>= eval
-	putStrLn $ extractValue $ trapError evaled
+	case length args of
+		0 -> runRepl
+		1 -> evalAndPrint $ (args !! 0)
+		otherwise -> putStrLn "Give suitable or no input"
+
+
+runRepl :: IO ()
+runRepl = until_ ( == "quit") (readPrompt "Scheme>>>") evalAndPrint
 
  ------------------------------------Parsing the Lisp Style Syntax ---------------------------
 
@@ -52,12 +58,12 @@ parseString = do
 parseNumber :: Parser LispVal
 parseNumber = liftM ( Number . read ) $ many1 digit  -- to parse number
 
-parseAtom :: Parser LispVal  -- to parse atoms
-parseAtom = do
+parseAtom :: Parser LispVal
+parseAtom = do 
 	first <- letter <|> symbol
-	rest <- many ( letter <|> digit <|> symbol )
-	let atom = [first] ++ rest
-	return $ case atom of
+	rest <- many (letter <|> digit <|> symbol)
+	let atom = [first] ++ rest 
+	return $ case atom of 
 		"#t" -> Bool True
 		"#f" -> Bool False
 		otherwise -> Atom atom
@@ -144,8 +150,17 @@ primitives =   [( "+" , numericBinop (+) ),
 				("string?", strBoolBinop (>)),
 				("cdr", cdr), -- this is something you want to look at
 				("car", car),
+				("cons", cons),
+				("eq?", eqv),
+				("eqv?", eqv),
+				("equal?", equal),
 				("string<?", strBoolBinop (<=)),
 				("string>?", strBoolBinop (>=))]
+
+
+numericBinop :: (Integer -> Integer -> Integer) -> [LispVal]-> ThrowsError LispVal
+numericBinop op singleVal@[_] = throwError $ NumArgs 2 singleVal
+numericBinop op params = mapM unpackNum params >>= return . Number . foldl1  op
 
 
 boolBinop :: (LispVal -> ThrowsError a)
@@ -157,11 +172,6 @@ boolBinop unpacker op [x,y] = do
     right <- unpacker y
     return $ Bool $ left `op` right
 boolBinop _ _ args = throwError $ NumArgs 2 args
-
-numericBinop :: (Integer -> Integer -> Integer) -> [LispVal]-> ThrowsError LispVal
-numericBinop op singleVal@[_] = throwError $ NumArgs 2 singleVal
-numericBinop op params = mapM unpackNum params >>= return . Number . foldl1  op
-
 
 numBoolBinop = boolBinop unpackNum
 strBoolBinop = boolBinop unpackStr
@@ -185,6 +195,27 @@ unpackNum (String n) = let parsed = reads n in
 								else return $ fst $ parsed !! 0
 unpackNum (List [n]) = unpackNum n
 unpackNum notNum  = throwError $ TypeMismatch "number" notNum
+
+
+data Unpacker = forall a . Eq a => AnyUnpacker (LispVal -> ThrowsError a)  -- to handle some extra equality conditions supported in scheme 
+
+
+unpackEquals :: LispVal -> LispVal -> Unpacker -> ThrowsError Bool
+unpackEquals arg1 arg2  (AnyUnpacker unpacker ) = do
+	unpacked1 <- unpacker arg1
+	unpacked2 <- unpacker arg2
+	return $ unpacked1 == unpacked2
+	`catchError` (const $ return False)
+
+
+equal ::[LispVal] -> ThrowsError LispVal  -- basically handles 2 == "2" -> "True" case   
+equal [arg1, arg2] = do
+	primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2) 
+		[AnyUnpacker unpackNum, AnyUnpacker unpackStr, AnyUnpacker unpackBool]
+	eqvEquals <- eqv [arg1, arg2]
+	return $ Bool $ (primitiveEquals || let (Bool x) = eqvEquals in x)
+equal badArgList = throwError $ NumArgs 2 badArgList
+
 
 ---------------------------------------List Manipulations in Scheme -------------------------------------
 
@@ -269,3 +300,29 @@ showError (NotFunction message func) = message ++ ": " ++ show func
 showError (NumArgs expected found ) = "Expected " ++ show expected ++ "args :: found values " ++ unwordsList found
 showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected ++ ", found : " ++ show found
 showError (Parser parseError ) = "Parse error at " ++ show parseError
+
+
+
+
+-------------------------------------Helper IO functions----------------------------------------------------
+
+flushStr :: String -> IO ()  -- function to take input and immediately flush out the result that we have evaluated
+flushStr str = putStr str >> hFlush stdout
+
+
+readPrompt :: String -> IO String  -- simple prompt generator for the scheme 
+readPrompt prompt = flushStr prompt >> getLine
+
+evalString :: String -> IO String
+evalString expr = return $ extractValue $ trapError (liftM show $ readExpr  expr >>= eval)
+
+evalAndPrint :: String -> IO ()
+evalAndPrint expr = evalString expr >>= putStrLn
+
+until_ :: Monad m => (a -> Bool ) -> m a -> (a -> m () ) -> m ()   -- Monadic gunction to help us come out of the Scheme 
+until_ pred prompt action = do 
+	result <- prompt
+	if pred result
+		then return ()
+		else action result >> until_ pred prompt action
+
