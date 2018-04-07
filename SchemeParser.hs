@@ -1,7 +1,8 @@
- ------------------------------------Parsing the Lisp Style Syntax ---------------------------
+{-# LANGUAGE ExistentialQuantification #-}
+------------------------------------Parsing the Lisp Style Syntax ---------------------------
 module SchemeParser where
 
-import SchemeError
+import LispVal
 import Control.Monad (liftM)
 import Control.Monad.Error
 import Data.Array (Array (..), listArray)
@@ -28,15 +29,6 @@ symbol = oneOf "!$%|*+-/:<=?>@^_~#"
 
 spaces :: Parser () -- additonal features to recognize spaces
 spaces = skipMany1 space
-
-
-data LispVal = Atom String  --data type support for Scheme
-	| List [LispVal]
-	| DottedList [LispVal] LispVal
-	| Number Integer
-	| String String
-	| Bool Bool
-
 
 parseString :: Parser LispVal
 parseString = do

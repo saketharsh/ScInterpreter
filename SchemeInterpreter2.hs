@@ -1,9 +1,9 @@
 {-# LANGUAGE ExistentialQuantification #-}
 module Main where
 
-import SchemeError
-import SchemeEval
+import LispVal
 import SchemeParser
+import SchemeEval
 import Control.Monad (liftM)
 import Control.Monad.Error
 import Data.Array (Array (..), listArray)

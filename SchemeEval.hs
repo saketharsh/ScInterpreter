@@ -2,6 +2,7 @@
 ---------------------------- Evaluating the Parsed Values -----------------------------------------------------------
 module SchemeEval where 
 
+import LispVal
 import SchemeParser
 import Control.Monad (liftM)
 import Control.Monad.Error
@@ -16,21 +17,6 @@ import System.Environment
 import Text.ParserCombinators.Parsec hiding (spaces)
 
 
-
-instance Show LispVal where show = showVal -- helps us to print LispVal type values
-
-
-showVal :: LispVal -> String   -- the basic printing function of our interpreter
-showVal (String contents) = "\"" ++ contents ++ "\""
-showVal (Atom name ) = name
-showVal (Number contents) = show contents
-showVal (Bool True ) = "#t"
-showVal (Bool False ) = "#f"
-showVal (List contents ) = "(" ++ unwordsList contents ++ ")"
-showVal (DottedList head tail) = "(" ++ unwordsList head ++ " . " ++  showVal tail ++ ")"
-
-unwordsList :: [LispVal] -> String -- helper function to print lists in the interpreter
-unwordsList = unwords . map  showVal
 
 eval :: LispVal -> ThrowsError LispVal
 eval val@(String _ ) =return  val
