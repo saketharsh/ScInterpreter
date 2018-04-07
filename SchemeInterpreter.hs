@@ -21,12 +21,15 @@ main = do
 	args <- getArgs
 	case length args of
 		0 -> runRepl
-		1 -> evalAndPrint $ (args !! 0)
+		1 -> runOne $ (args !! 0)
 		otherwise -> putStrLn "Give suitable or no input"
 
 
-runRepl :: IO ()
-runRepl = until_ ( == "quit") (readPrompt "Scheme>>>") evalAndPrint
+runOne :: String -> IO ()
+runOne expr = nullEnv >>= flip evalAndPrint expr
+
+runRepl ::  IO ()
+runRepl = nullEnv >>= until_ ( == "quit") (readPrompt "Scheme>>>") . evalAndPrint
 
 
 
@@ -40,11 +43,11 @@ flushStr str = putStr str >> hFlush stdout
 readPrompt :: String -> IO String  -- simple prompt generator for the scheme 
 readPrompt prompt = flushStr prompt >> getLine
 
-evalString :: String -> IO String
-evalString expr = return $ extractValue $ trapError (liftM show $ readExpr  expr >>= eval)
+evalString :: Env -> String -> IO String
+evalString env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= eval env
 
-evalAndPrint :: String -> IO ()
-evalAndPrint expr = evalString expr >>= putStrLn
+evalAndPrint ::  Env -> String -> IO ()
+evalAndPrint env expr = evalString env expr >>= putStrLn
 
 until_ :: Monad m => (a -> Bool ) -> m a -> (a -> m () ) -> m ()   -- Monadic gunction to help us come out of the Scheme 
 until_ pred prompt action = do 
@@ -53,19 +56,3 @@ until_ pred prompt action = do
 		then return ()
 		else action result >> until_ pred prompt action
 
-
-
-
-
--- ------------------------------------------- Defining Variable in Scheme -----------------------------------------------------
-
-
--- type Env = IORef [(String , IORef LispVal)]
--- type IOThrowsError = ErrorT LispError IO
-
--- nullEnv :: IO Env
--- nullEnv = newIORef []
-
--- liftThrows :: ThrowError a -> IoThrowsError a 
--- liftThrows (Left err) = throwError err
--- liftThrows (Right val) = return val
