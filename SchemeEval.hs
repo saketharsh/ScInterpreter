@@ -40,8 +40,8 @@ apply func args = maybe ( throwError $ NotFunction " Unrecognized primitive func
 
 primitives :: [(String, [LispVal]-> ThrowsError LispVal)] -- primitive operations that we wish to support1
 primitives =   [( "+" , numericBinop (+) ),
-				--( "-" , numericBinop (−) ),  -- - and * are crearting some problem, comment them out and evertything is fine
-				--( "*" , numericBinop (∗) ),
+				( "-" , numericBinop minuss ),  -- - and * are crearting some problem, comment them out and evertything is fine
+				( "*" , numericBinop intoo ),
 				( "/" , numericBinop div ),
 				( "mod" , numericBinop mod),
 				( "quotient" , numericBinop quot),
@@ -64,6 +64,13 @@ primitives =   [( "+" , numericBinop (+) ),
 				("equal?", equal),
 				("string<?", strBoolBinop (<=)),
 				("string>?", strBoolBinop (>=))]
+
+
+minuss :: Integer -> Integer -> Integer
+minuss a b  = a - b
+
+intoo :: Integer -> Integer -> Integer
+intoo a b = a*b
 
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal]-> ThrowsError LispVal
