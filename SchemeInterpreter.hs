@@ -4,17 +4,9 @@ module Main where
 import LispVal
 import SchemeParser
 import SchemeEval
-import Control.Monad (liftM)
 import Control.Monad.Error
-import Data.Array (Array (..), listArray)
-import Data.Char (toLower)
-import Data.Complex (Complex (..))
-import Data.IORef
-import Data.Ratio (Rational (..), (%))
 import System.IO hiding (try)
-import Numeric (readOct, readHex)
 import System.Environment
-import Text.ParserCombinators.Parsec hiding (spaces)
 
 main :: IO ()  -- left to add eval function over the readExpr, in order to get the output
 main = do
@@ -26,13 +18,10 @@ main = do
 
 
 runOne :: String -> IO ()
-runOne expr = nullEnv >>= flip evalAndPrint expr
+runOne expr = primitiveBindings  >>= flip evalAndPrint expr
 
 runRepl ::  IO ()
-runRepl = nullEnv >>= until_ ( == "quit") (readPrompt "Scheme>>>") . evalAndPrint
-
-
-
+runRepl = primitiveBindings >>= until_ ( == "quit") (readPrompt "Scheme>>>") . evalAndPrint
 
 -------------------------------------Helper IO functions----------------------------------------------------
 

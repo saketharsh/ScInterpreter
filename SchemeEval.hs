@@ -4,39 +4,131 @@ module SchemeEval where
 
 import LispVal
 import SchemeParser
-import Control.Monad (liftM)
 import Control.Monad.Error
-import Data.Array (Array (..), listArray)
-import Data.Char (toLower)
-import Data.Complex (Complex (..))
-import Data.IORef
-import Data.Ratio (Rational (..), (%))
-import System.IO hiding (try)
-import Numeric (readOct, readHex)
 import System.Environment
-import Text.ParserCombinators.Parsec hiding (spaces)
 
 
 
-eval :: Env ->  LispVal -> IOThrowsError LispVal
-eval env val@(String _ ) =return  val
-eval env val@(Number _ ) = return val
+eval :: Env -> LispVal -> IOThrowsError LispVal
+eval env val@(String _) = return val
+eval env val@(Char _) = return val
+eval env val@(Number _) = return val
 eval env val@(Bool _) = return val
 eval env (Atom id) = getVar env id
-eval env ( List [Atom "quote" , val] ) = return val
+eval env (List [Atom "quote", val]) = return val
+
 eval env (List [Atom "if", pred, conseq, alt]) = do
-	result <- eval env pred
-	case result of
-		Bool False -> eval env  alt
-		Bool False  -> eval env conseq
-eval env (List [Atom "set!", Atom var, form]) = eval env form >>= setVar env var
-eval env (List [Atom "define", Atom var , form]) = eval env form >>= defineVar env var
-eval env (List (Atom func : args)) = mapM (eval env )args >>= liftThrows . apply func
-eval env badForm = throwError $ BadSpecialForm "Unrecognized special Form"  badForm
+    result <- eval env pred
+    case result of
+        Bool False -> eval env alt
+        Bool True -> eval env conseq
+        otherwise  -> throwError $ TypeMismatch "boolean" result
 
-apply :: String -> [LispVal] -> ThrowsError LispVal
-apply func args = maybe ( throwError $ NotFunction " Unrecognized primitive function args" func ) ($ args) $ (lookup func primitives)
+eval env (List (Atom "cond" : [])) = throwError ExpectCondClauses
+eval env (List (Atom "cond" : cs)) = evalConds env cs
+eval env (List (Atom "case" : [])) = throwError ExpectCaseClauses
 
+eval env (List (Atom "case" : key : cs)) = do
+    keyVal <- eval env key
+    evalCaseCases env keyVal cs
+
+eval env (List [Atom "set!", Atom var, form]) =
+    eval env form >>= setVar env var
+
+eval env (List [Atom "define", Atom var, form]) =
+    eval env form >>= defineVar env var
+
+eval env (List (Atom "define" : List (Atom var : params) : body)) =
+    makeNormalFunc env params body >>= defineVar env var
+
+eval env (List (Atom "define" : DottedList (Atom var : params) varargs : body)) =
+    makeVarargs varargs env params body >>= defineVar env var
+
+eval env (List (Atom "lambda" : List params : body)) =
+    makeNormalFunc env params body
+
+eval env (List (Atom "lambda" : DottedList params varargs : body)) =
+    makeVarargs varargs env params body
+
+eval env (List (Atom "lambda" : varargs@(Atom _) : body)) =
+    makeVarargs varargs env [] body
+
+-- eval env (List [Atom "load", String filename]) =
+--     load filename >>= liftM last . mapM (eval env)
+
+eval env (List (function : args)) = do
+    func <- eval env function
+    argVals <- mapM (eval env) args
+    apply func argVals
+
+eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
+
+
+evalConds :: Env -> [LispVal] -> IOThrowsError LispVal
+evalConds env (List (Atom "else" : xs) : []) = evalCondElse env xs
+evalConds _ [] = throwError ExpectCondClauses
+evalConds env (List clause : cs) = evalCondClause env clause cs
+evalConds _ badClauses = throwError $ TypeMismatch "cond clauses" $ List badClauses
+
+evalCondClause env (test : xs) rest = do
+    result <- eval env test
+    case test of
+         Bool False -> evalConds env rest
+         Bool True -> trueDo xs
+         otherwise -> throwError $ TypeMismatch "boolean" result
+  where 
+    trueDo [] = return $ Bool True
+    trueDo xs = evalToLast env xs
+
+evalCondElse :: Env -> [LispVal] -> IOThrowsError LispVal
+evalCondElse _ [] = throwError ExpectCondClauses
+evalCondElse env xs = evalToLast env xs
+
+evalCaseCases :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
+evalCaseCases _ _ [] = throwError ExpectCaseClauses
+evalCaseCases env _ [List (Atom "else" : cExprs)] = evalToLast env cExprs
+evalCaseCases env key ((List ((List cKeys) : cExprs)) : cs) = do
+    let result = any anyOf $ map (\x -> eqv [key, x]) cKeys
+    case result of
+        False -> evalCaseCases env key cs
+        True -> evalToLast env cExprs
+  where
+    anyOf (Right (Bool True)) = True
+    anyOf _ = False
+evalCaseCases _ _ _ = throwError ExpectCaseClauses
+
+evalToLast :: Env -> [LispVal] -> IOThrowsError LispVal
+evalToLast _ [] = throwError $ NumArgs 1 []
+evalToLast env xs = liftM last $ mapM (eval env) xs
+
+---------------- Evaluation Part End ---------------------------------------
+
+
+apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
+apply (PrimitiveFunc func) args = liftThrows $ func args
+
+apply (Func params varargs body closure) args =
+    if num params /= num args && varargs == Nothing
+       then throwError $ NumArgs (num params) args
+       else (liftIO $ bindVars closure $ zip params args) >>=
+            bindVarArgs varargs >>=
+            evalBody
+    where remainingArgs = drop (length params) args
+          num = toInteger . length
+          evalBody env = liftM last $ mapM (eval env) body
+          bindVarArgs arg env = case arg of
+              Just argName -> liftIO $ bindVars env [(argName, List $ remainingArgs)]
+              Nothing -> return env
+
+
+primitiveBindings :: IO Env
+primitiveBindings = nullEnv >>= (flip bindVars $ map makePrimitiveFunc primitives)
+	where makePrimitiveFunc (var ,func ) = (var, PrimitiveFunc func)
+
+
+makeFunc varargs env params body  = return $ Func (map showVal params ) varargs body env
+makeNormalFunc = makeFunc Nothing
+makeVarargs = makeFunc . Just . showVal
 
 primitives :: [(String, [LispVal]-> ThrowsError LispVal)] -- primitive operations that we wish to support1
 primitives =   [( "+" , numericBinop (+) ),

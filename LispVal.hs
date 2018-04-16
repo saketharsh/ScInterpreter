@@ -19,12 +19,17 @@ data LispVal = Atom String  --data type support for Scheme
 	| List [LispVal]
 	| DottedList [LispVal] LispVal
 	| Number Integer
+	| Char Char
 	| String String
 	| Bool Bool
+	| PrimitiveFunc ([LispVal] -> ThrowsError LispVal)
+	| Func { params :: [String], vararg :: (Maybe String), body :: [LispVal], closure :: Env}
 
 
 
 data LispError = NumArgs Integer [LispVal]  -- more support can be added as time and knowledge permits
+	| ExpectCondClauses
+	| ExpectCaseClauses
 	| TypeMismatch String LispVal
 	| Parser ParseError
 	| BadSpecialForm String LispVal
@@ -40,12 +45,19 @@ unwordsList = unwords . map  showVal
 
 showVal :: LispVal -> String   -- the basic printing function of our interpreter
 showVal (String contents) = "\"" ++ contents ++ "\""
+showVal (Char ch) = "\"" ++ [ch] ++ "\""
 showVal (Atom name ) = name
 showVal (Number contents) = show contents
 showVal (Bool True ) = "#t"
 showVal (Bool False ) = "#f"
 showVal (List contents ) = "(" ++ unwordsList contents ++ ")"
 showVal (DottedList head tail) = "(" ++ unwordsList head ++ " . " ++  showVal tail ++ ")"
+showVal (PrimitiveFunc _) = "<primitive>"
+showVal (Func {params = args, vararg = varargs, body = body , closure = env}) = "lambda ( " ++ unwords (map show args) ++ 
+	(case varargs of 
+		Nothing -> ""
+		Just arg -> ". " ++ arg  ) ++ ") .. )"
+
 
 instance Show LispError where show = showError
 
