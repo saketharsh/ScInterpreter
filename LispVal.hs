@@ -24,7 +24,8 @@ data LispVal = Atom String  --data type support for Scheme
 	| Bool Bool
 	| PrimitiveFunc ([LispVal] -> ThrowsError LispVal)
 	| Func { params :: [String], vararg :: (Maybe String), body :: [LispVal], closure :: Env}
-
+	| IOFunc ([LispVal] -> IOThrowsError LispVal)
+	| Port Handle
 
 
 data LispError = NumArgs Integer [LispVal]  -- more support can be added as time and knowledge permits
@@ -57,6 +58,8 @@ showVal (Func {params = args, vararg = varargs, body = body , closure = env}) = 
 	(case varargs of 
 		Nothing -> ""
 		Just arg -> ". " ++ arg  ) ++ ") .. )"
+showVal (Port _) = "<IO port>"
+showVal (IOFunc _) = "<IO primitive>"
 
 
 instance Show LispError where show = showError
@@ -82,6 +85,8 @@ showError (NotFunction message func) = message ++ ": " ++ show func
 showError (NumArgs expected found ) = "Expected " ++ show expected ++ "args :: found values " ++ unwordsList found
 showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected ++ ", found : " ++ show found
 showError (Parser parseError ) = "Parse error at " ++ show parseError
+showError ExpectCondClauses = "Expected atleast 1 true cond clasuse"
+showError ExpectCaseClauses = "Expected atleast 1 case clause"
 
 type Env = IORef [(String, IORef LispVal)]
 
