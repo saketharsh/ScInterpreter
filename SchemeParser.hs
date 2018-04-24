@@ -27,7 +27,7 @@ readExpr = readOrThrow parseExpr
 readExprList = readOrThrow (endBy parseExpr spaces)
 
 symbol :: Parser Char   -- parser that recognises the symbol
-symbol = oneOf "!$%|*+-/:<=?>@^_~#"
+symbol = oneOf "&!$%|*+-/:<=?>@^_~#"
 
 spaces :: Parser () -- additonal features to recognize spaces
 spaces = skipMany1 space

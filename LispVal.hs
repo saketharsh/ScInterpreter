@@ -1,5 +1,4 @@
 {-# LANGUAGE ExistentialQuantification #-}
---------------------------------------Error Handling for Scheme -----------------------------------------
 module LispVal where
 
 import Control.Monad (liftM)
