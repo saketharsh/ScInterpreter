@@ -32,7 +32,7 @@ symbol = oneOf "&!$%|*+-/:<=?>@^_~#"
 spaces :: Parser () -- additonal features to recognize spaces
 spaces = skipMany1 space
 
-parseString :: Parser LispVal
+parseString :: Parser LispVal -- parses String
 parseString = do
 	char '"'
 	s <- many (noneOf "\"")
