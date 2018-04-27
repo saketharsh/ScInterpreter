@@ -58,6 +58,8 @@ eval env (List (Atom "lambda" : varargs@(Atom _) : body)) =
 eval env (List [Atom "load", String filename]) =
     load filename >>= liftM last . mapM (eval env)
 
+eval env (List (Number n: xs)) = throwError $ NotFunction (show n) ("is not a function")
+
 eval env (List (function : args)) = do
     func <- eval env function
     argVals <- mapM (eval env) args
