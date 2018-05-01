@@ -1,0 +1,20 @@
+We support only Integers, Boolean and Strings.
+Declaring a variable - (define x 3)
+Declaring a function - (define (f arg1 arg2 .. argn) (definition))
+Operation - (op var1 var2)
+Load file - (load "filename")
+Initializing a curry function - (define (f a) (curry + a))
++ => Overloaded for any number of arguments. Similar for -, *, /.
+String -> Predefined functions -> string<?, string>?, string=?
+Numbers -> eq? , =, eqv?
+equal? -> Unpack using different unpackers, and if value is same, return true.
+If - if (condition) (if_true) (if_false)
+Case - case var ((val1) stmt1) ((var2) stmt2)
+Predefined - foldl, map, curry, sum, max, min, length, reverse
+(foldl + 0 '(1 2 3 4))
+(map (curry + 2) '(1 2 3 4))
+((lambda (in1 in2 in3) (function)) input)
+Error handling - Errors are found in LispVal.hs.
+(define (fact x) (if (= x 0) (1) (* x (fact (- x 1)))))
+(define (f x) (+ 2 x)); (define (g x) (* 2 x));
+(define (h x) (f (g x))) --- higher order function
