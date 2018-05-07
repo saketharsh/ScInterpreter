@@ -1,5 +1,5 @@
-# cs653project
-Course Project for CS 653 (Functional Progarmming)
+# ScInterpreter
+Scheme Interpreter in Haskell written as Course Project for CS 653 (Functional Progarmming)
 
 ## Dependencies 
 Install cabal for package management in Haskell. 
